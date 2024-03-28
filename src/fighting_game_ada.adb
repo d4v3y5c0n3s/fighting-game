@@ -1273,9 +1273,30 @@ procedure Fighting_Game_Ada is
                           state.p1_input_state
                       );
                       
-                      pause_player_current_snapshot : constant Input_Snapshot := Snapshot_Input(pause_player_input_state);
+                      pause_player_connected : constant Boolean := (case state.paused is
+                        when Player_One =>
+                          state.p1_connected,
+                        when others =>
+                          state.p2_connected
+                      );
                       
-                      other_player_current_snapshot : constant Input_Snapshot := Snapshot_Input(other_player_input_state);
+                      other_player_connected : constant Boolean := (case state.paused is
+                        when Player_One =>
+                          state.p2_connected,
+                        when others =>
+                          state.p1_connected
+                      );
+                      
+                      paused_by_player : constant Pause_State := (case state.paused is
+                        when Player_One =>
+                          Player_One,
+                        when others =>
+                          Player_Two
+                      );
+                      
+                      pause_player_current_snapshot : constant Input_Snapshot := (if pause_player_connected then Snapshot_Input(pause_player_input_state) else Input_Snapshot'(others => false));
+                      
+                      other_player_current_snapshot : constant Input_Snapshot := (if other_player_connected then Snapshot_Input(other_player_input_state) else Input_Snapshot'(others => false));
                       
                       procedure Playback_Player_Inputs (F : in out Fighter.Fighter; last_inputs : Input_Snapshot; current_inputs : Input_Snapshot) is
                       begin
@@ -1352,13 +1373,25 @@ procedure Fighting_Game_Ada is
                         state.paused := Unpaused;
                         state.pause_menu_options_index := 0;
                         
-                        if state.paused = Player_One then
-                          Playback_Player_Inputs(state.player_one, state.paused_player_last_inputs, pause_player_current_snapshot);
-                          Playback_Player_Inputs(state.player_two, state.other_player_last_inputs, other_player_current_snapshot);
-                        else
-                          Playback_Player_Inputs(state.player_two, state.paused_player_last_inputs, pause_player_current_snapshot);
-                          Playback_Player_Inputs(state.player_one, state.other_player_last_inputs, other_player_current_snapshot);
-                        end if;
+                        Playback_After_Unpause:
+                          declare
+                            procedure Playback_For_Fighters (paused_fighter : in out Fighter.Fighter; other_fighter : in out Fighter.Fighter) is
+                            begin
+                              if pause_player_connected then
+                                Playback_Player_Inputs(paused_fighter, state.paused_player_last_inputs, pause_player_current_snapshot);
+                              end if;
+                              
+                              if other_player_connected then
+                                Playback_Player_Inputs(other_fighter, state.other_player_last_inputs, other_player_current_snapshot);
+                              end if;
+                            end Playback_For_Fighters;
+                          begin
+                            if paused_by_player = Player_One then
+                              Playback_For_Fighters(state.player_one, state.player_two);
+                            else
+                              Playback_For_Fighters(state.player_two, state.player_one);
+                            end if;
+                          end Playback_After_Unpause;
                         
                         Increase_Volume_To_Normal:
                           declare
