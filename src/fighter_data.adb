@@ -8,6 +8,7 @@ with Projectile;
 package body Fighter_Data is
   
   function Load_Fighter (F : Fighter_Options) return Fighter.Fighter is
+    jump_sound_path : constant String := "assets/jump_sound.flac";
     data : Fighter.Fighter;
   begin
     data.extended_bitmaps := (case F is
@@ -424,6 +425,11 @@ package body Fighter_Data is
             )
           ))
         )
+    );
+    
+    data.jump_sound := (case F is
+      when others =>
+        al_load_sample(New_String(jump_sound_path))
     );
     
     case F is

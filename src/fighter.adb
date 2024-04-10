@@ -77,6 +77,8 @@ package body Fighter is
   end Play_Walk_Anim;
 
   procedure Press_Input (F : in out Fighter; given_input : input_ids; frame : Natural) is
+    sid : access allegro_audio_h.ALLEGRO_SAMPLE_ID := new allegro_audio_h.ALLEGRO_SAMPLE_ID;
+    played : Boolean := false;
   begin
     Queue_Input(F, Frame_And_Input'(frame, given_input));
     case given_input is
@@ -86,6 +88,7 @@ package body Fighter is
           F.velocity_vertical := F.jump_speed;
           F.strafing_left := F.holding_left;
           F.strafing_right := F.holding_right;
+          played := Boolean(allegro_audio_h.al_play_sample(F.jump_sound, 1.0, 0.0, 1.0, allegro_audio_h.ALLEGRO_PLAYMODE_ONCE, sid));
           Execute_Move(F, F.on_jump_steps, Jump);
         end if;
       when left =>

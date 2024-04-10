@@ -421,7 +421,12 @@ procedure Fighting_Game_Ada is
   title_transition_move_x_final : constant Scalar := title_logo_start_x + (title_transition_to_menu_title_slide_frames * title_transition_move_x_amount);
   title_transition_move_y_final : constant Scalar := title_logo_slide_final_y + (title_transition_to_menu_title_slide_frames * title_transition_move_y_amount);
   menu_text_zoom : constant Float := 2.0;
-  menu_sound_path : constant String := "assets/menu_move_pop.flac";
+  menu_move_sound_path : constant String := "assets/menu_move_sound.flac";
+  menu_select_sound_path : constant String := "assets/menu_select_sound.flac";
+  hit_sound_path : constant String := "assets/hit_sound.flac";
+  block_sound_path : constant String := "assets/block_sound.flac";
+  grab_sound_path : constant String := "assets/grab_sound.flac";
+  victory_sound_path : constant String := "assets/victory_sound.flac";
   player_assign_background_path : constant String := "assets/player_assign_background.png";
   player_assign_controller_icon_path : constant String := "assets/controller_icon.png";
   player_assign_keyboard_icon_path : constant String := "assets/keyboard_icon.png";
@@ -454,6 +459,11 @@ procedure Fighting_Game_Ada is
   Unselected_Text_Color : ALLEGRO_COLOR;
   Selected_Text_Color : ALLEGRO_COLOR;
   menu_move_sound : access ALLEGRO_SAMPLE;
+  menu_select_sound : access ALLEGRO_SAMPLE;
+  hit_sound : access ALLEGRO_SAMPLE;
+  block_sound : access ALLEGRO_SAMPLE;
+  grab_sound : access ALLEGRO_SAMPLE;
+  victory_sound : access ALLEGRO_SAMPLE;
   player_assign_background_bitmap: ALLEGRO_BITMAP_ACCESS;
   player_assign_controller_icon_bitmap : ALLEGRO_BITMAP_ACCESS;
   player_assign_keyboard_icon_bitmap : ALLEGRO_BITMAP_ACCESS;
@@ -636,10 +646,13 @@ procedure Fighting_Game_Ada is
       end Mark_Matching_As_Hit;
       
       procedure On_Hit (hit_with : Hitbox) is
+        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+        played_successfully : Boolean := false;
       begin
         if Defender.armor > 0 then
           Defender.armor := Defender.armor - 1;
         else
+          played_successfully := Boolean(al_play_sample(hit_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
           Defender.hitpoints := Defender.hitpoints - hit_with.damage;
           Defender.hitstun_duration := hit_with.hitstun_duration;
           Defender.knockback_velocity_vertical := hit_with.knockback_vertical;
@@ -651,6 +664,8 @@ procedure Fighting_Game_Ada is
       end On_Hit;
       
       procedure On_Block is
+        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+        played_successfully : Boolean := Boolean(al_play_sample(block_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
       begin
         Defender.blockstun_duration := universal_blockstun;
         if Defender.crouching then
@@ -661,6 +676,8 @@ procedure Fighting_Game_Ada is
       end On_Block;
       
       procedure On_Grab is
+        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+        played_successfully : Boolean := false;
       begin
         if Attacker.grabbing and Defender.grabbing then
           Attacker.knockback_velocity_horizontal := counter_grab_pushback;
@@ -668,6 +685,7 @@ procedure Fighting_Game_Ada is
           Defender.knockback_velocity_horizontal := counter_grab_pushback;
           Defender.knockback_duration := counter_grab_push_duration;
         else
+          played_successfully := Boolean(al_play_sample(grab_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
           Defender.grabbed := true;
           Fighter.Execute_Move(Attacker, Attacker.grab_actions_steps(elem.grab_opponent_steps_index), Grabbing);
           Fighter.Execute_Move(Defender, Attacker.grabbed_opponent_reactions_steps(elem.grab_opponent_steps_index), Grabbed);
@@ -1109,41 +1127,81 @@ procedure Fighting_Game_Ada is
                     Menu_Input_For_Player;
                   end MenuInput;
               when Stage_Select =>
-                if Input_Recognized(Ev, state.p1_input_state, Up_Press) then
-                  state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Up);
-                elsif Input_Recognized(Ev, state.p1_input_state, Down_Press) then
-                  state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Down);
-                elsif Input_Recognized(Ev, state.p1_input_state, Left_Press) then
-                  state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Left);
-                elsif Input_Recognized(Ev, state.p1_input_state, Right_Press) then
-                  state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Right);
-                end if;
-                
-                if Input_Recognized(Ev, state.p1_input_state, default_general_menu_select) then
-                  Menu_Select_Entry(state.stage_entries.all, state.p1_stage_index);
-                end if;
+                StateInput:
+                  declare
+                    procedure Stage_Move_Sound is
+                      sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+                      played : Boolean := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+                    begin
+                      null;
+                    end Stage_Move_Sound;
+                    
+                    procedure Stage_Select_Sound is
+                      sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+                      played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+                    begin
+                      null;
+                    end Stage_Select_Sound;
+                  begin
+                    if Input_Recognized(Ev, state.p1_input_state, Up_Press) then
+                      state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Up);
+                      Stage_Move_Sound;
+                    elsif Input_Recognized(Ev, state.p1_input_state, Down_Press) then
+                      state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Down);
+                      Stage_Move_Sound;
+                    elsif Input_Recognized(Ev, state.p1_input_state, Left_Press) then
+                      state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Left);
+                      Stage_Move_Sound;
+                    elsif Input_Recognized(Ev, state.p1_input_state, Right_Press) then
+                      state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Right);
+                      Stage_Move_Sound;
+                    end if;
+                    
+                    if Input_Recognized(Ev, state.p1_input_state, default_general_menu_select) then
+                      Menu_Select_Entry(state.stage_entries.all, state.p1_stage_index);
+                      Stage_Select_Sound;
+                    end if;
 
-                if Input_Recognized(Ev, state.p1_input_state, default_general_menu_go_back) then
-                  Go_Back_To_Menu;
-                end if;
+                    if Input_Recognized(Ev, state.p1_input_state, default_general_menu_go_back) then
+                      Go_Back_To_Menu;
+                    end if;
+                  end StateInput;
               when Character_Select =>
                 Char_Select_Input:
                   declare
                     procedure Char_Select_Input (GIS : Game_Input_State; menu_index : in out Natural) is
                       menu : constant access Menu_Entry_Array := state.char_entries;
+                      sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+                      
+                      procedure Char_Move_Sound is
+                        played : Boolean := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+                      begin
+                        null;
+                      end Char_Move_Sound;
+                      
+                      procedure Char_Select_Sound is
+                        played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+                      begin
+                        null;
+                      end Char_Select_Sound;
                     begin
                       if Input_Recognized(Ev, GIS, Up_Press) then
                         menu_index := Menu_Move(menu.all, menu_index, Up);
+                        Char_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, Down_Press) then
                         menu_index := Menu_Move(menu.all, menu_index, Down);
+                        Char_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, Left_Press) then
                         menu_index := Menu_Move(menu.all, menu_index, Left);
+                        Char_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, Right_Press) then
                         menu_index := Menu_Move(menu.all, menu_index, Right);
+                        Char_Move_Sound;
                       end if;
                       
                       if Input_Recognized(Ev, GIS, default_general_menu_select) then
                         Menu_Select_Entry(menu.all, menu_index);
+                        Char_Select_Sound;
                       end if;
                       
                       if Input_Recognized(Ev, GIS, default_general_menu_go_back) then
@@ -1362,13 +1420,30 @@ procedure Fighting_Game_Ada is
                           Fighter.Release_Input(F, Globals.atk_6, state.frame);
                         end if;
                       end Playback_Player_Inputs;
+                      
+                      procedure Pause_Move_Sound is
+                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+                        played : Boolean := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+                      begin
+                        null;
+                      end Pause_Move_Sound;
+                      
+                      procedure Pause_Select_Sound is
+                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+                        played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+                      begin
+                        null;
+                      end Pause_Select_Sound;
                     begin
                       if Input_Recognized(Ev, pause_player_input_state, Up_Press) then
                         state.pause_menu_options_index := Menu_Move(state.pause_menu_options.all, state.pause_menu_options_index, Up);
+                        Pause_Move_Sound;
                       elsif Input_Recognized(Ev, pause_player_input_state, Down_Press) then
                         state.pause_menu_options_index := Menu_Move(state.pause_menu_options.all, state.pause_menu_options_index, Down);
+                        Pause_Move_Sound;
                       elsif Input_Recognized(Ev, pause_player_input_state, default_general_menu_select) then
                         Menu_Select_Entry(state.pause_menu_options.all, state.pause_menu_options_index);
+                        Pause_Select_Sound;
                       elsif Input_Recognized(Ev, pause_player_input_state, Start_Press) then
                         state.paused := Unpaused;
                         state.pause_menu_options_index := 0;
@@ -1406,13 +1481,29 @@ procedure Fighting_Game_Ada is
                 Battle_Over_Input:
                   declare
                     procedure Player_Decide_After_Battle (GIS : Game_Input_State) is
+                      procedure Battle_Over_Move_Sound is
+                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+                        played : Boolean := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+                      begin
+                        null;
+                      end Battle_Over_Move_Sound;
+                      
+                      procedure Battle_Over_Select_Sound is
+                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+                        played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+                      begin
+                        null;
+                      end Battle_Over_Select_Sound;
                     begin
                       if Input_Recognized(Ev, GIS, Up_Press) then
                         state.after_battle_index := Menu_Move(state.after_battle_options.all, state.after_battle_index, Up);
+                        Battle_Over_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, Down_Press) then
                         state.after_battle_index := Menu_Move(state.after_battle_options.all, state.after_battle_index, Down);
+                        Battle_Over_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, default_general_menu_select) then
                         Menu_Select_Entry(state.after_battle_options.all, state.after_battle_index);
+                        Battle_Over_Select_Sound;
                       end if;
                     end Player_Decide_After_Battle;
                     procedure Player_Decide_P1 is begin Player_Decide_After_Battle(state.p1_input_state); end Player_Decide_P1;
@@ -1838,7 +1929,12 @@ begin
     debug_attack_hitbox_color := al_map_rgb(220, 50, 50);
     debug_chunkbox_color := al_map_rgb(87, 87, 82);
     
-    menu_move_sound := al_load_sample(New_String(menu_sound_path));
+    menu_move_sound := al_load_sample(New_String(menu_move_sound_path));
+    menu_select_sound := al_load_sample(New_String(menu_select_sound_path));
+    hit_sound := al_load_sample(New_String(hit_sound_path));
+    block_sound := al_load_sample(New_String(block_sound_path));
+    grab_sound := al_load_sample(New_String(grab_sound_path));
+    victory_sound := al_load_sample(New_String(victory_sound_path));
     
     state := new Game_State_Data(Title);
     
@@ -1984,6 +2080,9 @@ begin
                           
                           Fighter.Execute_Move(Player, Player.idle_stand_steps, Idle);
                         end Reset_Player;
+                        
+                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+                        played_successfully : Boolean := Boolean(al_play_sample(victory_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
                         
                       begin
                         Award_Round_Win_If_Dead(state.player_one_won_rounds, state.player_two);
