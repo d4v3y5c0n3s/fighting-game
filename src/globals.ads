@@ -123,6 +123,8 @@ package Globals is
     knockback_vertical, knockback_horizontal : Scalar := 0.0;
     knockback_duration : Natural := 0;
     hitstun_duration : Natural := 0;
+    hit_pushback : Scalar := 0.0;
+    hit_pushback_duration : Natural := 0;
   end record;
   
   type What_Doing is (

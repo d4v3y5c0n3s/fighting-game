@@ -55,7 +55,9 @@ package body Fighter_Data is
             knockback_vertical => 30.0,
             knockback_horizontal => 13.0,
             knockback_duration => 2,
-            hitstun_duration => 11
+            hitstun_duration => 11,
+	    hit_pushback => 0.0,
+	    hit_pushback_duration => 0
           )),
           Position'(X => 8.0, Y => -7.0),
           al_load_bitmap(New_String("assets/temp_stage_char_icon.png")),
@@ -457,7 +459,9 @@ package body Fighter_Data is
                   knockback_vertical => 0.0,
                   knockback_horizontal => 0.0,
                   knockback_duration => 0,
-                  hitstun_duration => 0
+                  hitstun_duration => 0,
+                  hit_pushback => 0.0,
+                  hit_pushback_duration => 0
                 ))
               )),
               new Move.Move_Step'(frame_duration => 10, operations => new Move.Move_Sub_Step_Collection'(
@@ -504,7 +508,9 @@ package body Fighter_Data is
                   knockback_vertical => 30.0,
                   knockback_horizontal => 13.0,
                   knockback_duration => 2,
-                  hitstun_duration => 11
+                  hitstun_duration => 11,
+                  hit_pushback => 0.0,
+                  hit_pushback_duration => 0
                 )
               ),
               new Move.Move_Sub_Step'(
@@ -569,7 +575,9 @@ package body Fighter_Data is
                   knockback_vertical => 5.0,
                   knockback_horizontal => -22.0,
                   knockback_duration => 2,
-                  hitstun_duration => 26
+                  hitstun_duration => 26,
+                  hit_pushback => 0.0,
+                  hit_pushback_duration => 0
                 )
               ),
               new Move.Move_Sub_Step'(
@@ -647,7 +655,9 @@ package body Fighter_Data is
                   knockback_vertical => 8.0,
                   knockback_horizontal => 2.0,
                   knockback_duration => 4,
-                  hitstun_duration => 18
+                  hitstun_duration => 18,
+                  hit_pushback => 0.0,
+                  hit_pushback_duration => 0
                 )
               )
             )),
@@ -695,7 +705,9 @@ package body Fighter_Data is
                   knockback_vertical => 0.0,
                   knockback_horizontal => 0.0,
                   knockback_duration => 0,
-                  hitstun_duration => 0
+                  hitstun_duration => 0,
+                  hit_pushback => 0.0,
+                  hit_pushback_duration => 0
                 ))
               )),
               new Move.Move_Step'(frame_duration => 10, operations => new Move.Move_Sub_Step_Collection'(
@@ -726,7 +738,9 @@ package body Fighter_Data is
                   knockback_vertical => 40.0,
                   knockback_horizontal => 50.0,
                   knockback_duration => 2,
-                  hitstun_duration => 10
+                  hitstun_duration => 10,
+                  hit_pushback => 0.0,
+                  hit_pushback_duration => 0
                 )),
                 1 => new Move.Move_Sub_Step'(O => Move.Play_Sound,
                   sound_index => 0
@@ -747,7 +761,9 @@ package body Fighter_Data is
                   knockback_vertical => 40.0,
                   knockback_horizontal => 50.0,
                   knockback_duration => 2,
-                  hitstun_duration => 10
+                  hitstun_duration => 10,
+                  hit_pushback => 50.0,
+                  hit_pushback_duration => 5
                 )),
                 1 => new Move.Move_Sub_Step'(
                   O => Move.Show_Extended_Bitmap,

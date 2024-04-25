@@ -649,6 +649,9 @@ procedure Fighting_Game_Ada is
         sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
         played_successfully : Boolean := false;
       begin
+	Attacker.pushback := hit_with.hit_pushback * (case Attacker.facing_right is when true => -1.0, when false => 1.0);
+	Attacker.pushback_duration := hit_with.hit_pushback_duration;
+	
         if Defender.armor > 0 then
           Defender.armor := Defender.armor - 1;
         else
@@ -659,14 +662,17 @@ procedure Fighting_Game_Ada is
           Defender.knockback_velocity_horizontal := hit_with.knockback_horizontal;
           Defender.knockback_duration := hit_with.knockback_duration;
           Defender.dash_duration := 0;
+	  Defender.pushback_duration := 0;
           Fighter.Execute_Move(Defender, Defender.on_hit_steps, Hit_By_Attack);
         end if;
       end On_Hit;
       
-      procedure On_Block is
+      procedure On_Block (blocked : Hitbox) is
         sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
         played_successfully : Boolean := Boolean(al_play_sample(block_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
       begin
+	Attacker.pushback := blocked.hit_pushback * (case Attacker.facing_right is when true => -1.0, when false => 1.0);
+	Attacker.pushback_duration := blocked.hit_pushback_duration;
         Defender.blockstun_duration := universal_blockstun;
         if Defender.crouching then
           Fighter.Execute_Move(Defender, Defender.crouching_block_steps, Blocked_Attack);
@@ -701,7 +707,7 @@ procedure Fighting_Game_Ada is
             case atk_hb.effect is
               when Attack =>
                 if Defender.blocking and ((touches_upper and not Defender.crouching) or (touches_lower and Defender.crouching)) then
-                  On_Block;
+                  On_Block(atk_hb);
                 else
                   On_Hit(atk_hb);
                 end if;
@@ -2067,6 +2073,8 @@ begin
                           Player.dash_duration := 0;
                           Player.upper_hitbox_temp_offset := Position'(X => 0.0, Y => 0.0);
                           Player.lower_hitbox_temp_offset := Position'(X => 0.0, Y => 0.0);
+			  Player.pushback := 0.0;
+			  Player.pushback_duration := 0;
                           
                           for EB of Player.extended_bitmaps.all loop
                             EB.shown := false;

@@ -106,6 +106,8 @@ package Fighter is
     forwards_walk_steps : Move.Move_Step_Array_Access;
     backwards_walk_steps : Move.Move_Step_Array_Access;
     jump_sound : access allegro_audio_h.ALLEGRO_SAMPLE;
+    pushback : Scalar := 0.0;
+    pushback_duration : Natural := 0;
   end record;
   
   procedure Press_Input (F : in out Fighter; given_input : input_ids; frame : Natural);

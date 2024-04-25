@@ -493,21 +493,25 @@ package body Fighter is
           F.velocity_horizontal := -F.dash_velocity_horizontal;
         end if;
       else
-        if F.on_ground then
-          if F.holding_left and not F.holding_right and not F.crouching then
-            F.velocity_horizontal := -F.walk_speed;
-          elsif F.holding_right and not F.holding_left and not F.crouching then
-            F.velocity_horizontal := F.walk_speed;
-          else
-            F.velocity_horizontal := 0.0;
-          end if;
+        if F.pushback_duration > 0 then
+          F.velocity_horizontal := F.pushback;
         else
-          if F.strafing_left and not F.strafing_right then
-            F.velocity_horizontal := -F.air_strafe_speed;
-          elsif F.strafing_right and not F.strafing_left then
-            F.velocity_horizontal := F.air_strafe_speed;
+          if F.on_ground then
+            if F.holding_left and not F.holding_right and not F.crouching then
+              F.velocity_horizontal := -F.walk_speed;
+            elsif F.holding_right and not F.holding_left and not F.crouching then
+              F.velocity_horizontal := F.walk_speed;
+            else
+              F.velocity_horizontal := 0.0;
+            end if;
           else
-            F.velocity_horizontal := 0.0;
+            if F.strafing_left and not F.strafing_right then
+              F.velocity_horizontal := -F.air_strafe_speed;
+            elsif F.strafing_right and not F.strafing_left then
+              F.velocity_horizontal := F.air_strafe_speed;
+            else
+              F.velocity_horizontal := 0.0;
+            end if;
           end if;
         end if;
       end if;
@@ -544,6 +548,10 @@ package body Fighter is
       if F.dash_duration = 0 then
         F.on_ground := false;
       end if;
+    end if;
+    
+    if F.pushback_duration > 0 then
+      F.pushback_duration := F.pushback_duration - 1;
     end if;
     
     -- update any extended bitmaps
