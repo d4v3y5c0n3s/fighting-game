@@ -31,8 +31,6 @@ with Move;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Projectile;
 
-with Ada.Text_IO;
-
 procedure Fighting_Game_Ada is
   
   type Title_State is (Logo_Slide_In, Press_Start_Flashing, Start_Transition_To_Menu);
