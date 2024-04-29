@@ -20,6 +20,7 @@ with allegro_acodec_h; use allegro_acodec_h;
 with allegro5_bitmap_h; use allegro5_bitmap_h;
 with allegro5_bitmap_draw_h; use allegro5_bitmap_draw_h;
 with allegro5_joystick_h; use allegro5_joystick_h;
+with allegro5_monitor_h; use allegro5_monitor_h;
 with Globals; use Globals;
 with Fighter;
 with Cool_Math; use Cool_Math;
@@ -29,6 +30,8 @@ with Control_Bindings; use Control_Bindings;
 with Move;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Projectile;
+
+with Ada.Text_IO;
 
 procedure Fighting_Game_Ada is
   
@@ -117,6 +120,9 @@ procedure Fighting_Game_Ada is
   
   procedure Main_Menu_Go_To_Verses;
   procedure Main_Menu_Quit_Game;
+  procedure Main_Menu_Open_Settings;
+  procedure Settings_Toggle_Fullscreen;
+  procedure Settings_Close;
   
   procedure Choose_Stage;
   
@@ -145,6 +151,10 @@ procedure Fighting_Game_Ada is
   title_background_path : constant String := "assets/mall_warriors_sky_background.png";
   title_logo_path : constant String := "assets/mall_warriors_logo.png";
   title_start_message_path : constant String := "assets/mall_warriors_press_start.png";
+  settings_fullscreen_toggle_text_off : constant access String := new String'("Toggle Window Mode: [Windowed]");
+  settings_fullscreen_toggle_text_on : constant access String := new String'("Toggle Window Mode: [Full Windowed]");
+  screen_width : constant Scalar := 800.0;
+  screen_height : constant Scalar := 600.0;
   
   type Icon is record
     bitmap : ALLEGRO_BITMAP_ACCESS;
@@ -157,6 +167,8 @@ procedure Fighting_Game_Ada is
   subtype Paused_By is Pause_State range Player_One .. Player_Two;
   
   type Who_Won is (Player_One, Player_Two, Tied);
+  
+  type Menu_Mode is (Main, Settings);
   
   type Game_State is (Title, Menu, Stage_Select, Character_Select, Battle, Battle_Over);
   type Game_State_Data (GS : Game_State) is record
@@ -183,6 +195,10 @@ procedure Fighting_Game_Ada is
     );
     p1_connected : Boolean := true;
     p2_connected : Boolean := false;
+    fullscreen : Boolean := false;
+    fullscreen_bitmap : ALLEGRO_BITMAP_ACCESS;
+    monitor_width : Integer := Integer(screen_width);
+    monitor_height : Integer := Integer(screen_height);
     case GS is
       when Title =>
         ts : Title_State := Logo_Slide_In;
@@ -204,23 +220,45 @@ procedure Fighting_Game_Ada is
             operation => Main_Menu_Go_To_Verses'Access,
             text => new String'("Versus Mode"),
             offset => Position'(X => 100.0, Y => 100.0),
-            above_move_entry => 0,
+            above_move_entry => 2,
             below_move_entry => 1,
             left_move_entry => 0,
             right_move_entry => 0
           ),
           1 => Menu_Entry'(
-            operation => Main_Menu_Quit_Game'Access,
-            text => new String'("Quit"),
+            operation => Main_Menu_Open_Settings'Access,
+            text => new String'("Settings"),
             offset => Position'(X => 100.0, Y => 140.0),
             above_move_entry => 0,
-            below_move_entry => 1,
+            below_move_entry => 2,
             left_move_entry => 1,
             right_move_entry => 1
+          ),
+          2 => Menu_Entry'(
+            operation => Main_Menu_Quit_Game'Access,
+            text => new String'("Quit"),
+            offset => Position'(X => 100.0, Y => 180.0),
+            above_move_entry => 1,
+            below_move_entry => 0,
+            left_move_entry => 2,
+            right_move_entry => 2
           )
         );
         menu_index : Natural := 0;
         menu_help_screen_shown : Boolean := false;
+        settings_menu : access Menu_Entry_Array := new Menu_Entry_Array'(
+          0 => Menu_Entry'(
+            operation => Settings_Toggle_Fullscreen'Access,
+            text => settings_fullscreen_toggle_text_off,
+            offset => Position'(X => 100.0, Y => 100.0),
+            above_move_entry => 0,
+            below_move_entry => 0,
+            left_move_entry => 0,
+            right_move_entry => 0
+          )
+        );
+        settings_index : Natural := 0;
+        main_menu_mode : Menu_Mode := Main;
       when Stage_Select =>
         stage_entries : access Menu_Entry_Array := new Menu_Entry_Array'(Menu_Entries_Connect_Gridwise(
         Menu_Entry_Array'(
@@ -399,9 +437,7 @@ procedure Fighting_Game_Ada is
   
   type Wall_Collision is (None, Left_Collision, Right_Collision);
   
-  screen_width : constant Scalar := 800.0;
   half_screen_width : constant Scalar := screen_width / 2.0;
-  screen_height : constant Scalar := 600.0;
   floor_height : constant Scalar := Scalar(screen_height / 6.0) * 5.0;
   stage_width : constant Scalar := screen_width * 3.0;
   half_stage_width : constant Scalar := stage_width / 2.0;
@@ -509,6 +545,12 @@ procedure Fighting_Game_Ada is
     New_GS.p2_connected := Old_GS.p2_connected;
     New_GS.p1_input_state := Old_GS.p1_input_state;
     New_GS.p2_input_state := Old_GS.p2_input_state;
+    if Old_GS.fullscreen then
+      New_GS.fullscreen := true;
+      New_GS.fullscreen_bitmap := Old_GS.fullscreen_bitmap;
+      New_GS.monitor_width := Old_GS.monitor_width;
+      New_GS.monitor_height := Old_GS.monitor_height;
+    end if;
   end Game_State_Pass_Player_Inputs;
   
   procedure Main_Menu_Go_To_Verses is
@@ -522,12 +564,57 @@ procedure Fighting_Game_Ada is
       end Go_To_Stage_Select;
   end Main_Menu_Go_To_Verses;
   
+  procedure Main_Menu_Open_Settings is
+  begin
+    state.main_menu_mode := Settings;
+  end Main_Menu_Open_Settings;
+  
   procedure Go_Back_To_Character_Select (stage : Stage_Options);
   
   procedure Main_Menu_Quit_Game is
   begin
     state.should_exit := true;
   end Main_Menu_Quit_Game;
+  
+  procedure Settings_Toggle_Fullscreen is
+  begin
+    al_unregister_event_source(Q, DisplayEventSrc);
+    al_destroy_display(Display);
+    
+    if state.fullscreen then
+      -- ALLEGRO_WINDOWED
+      al_set_new_display_flags(1);
+      state.settings_menu(0).text := settings_fullscreen_toggle_text_off;
+      
+      Display := al_create_display(int(screen_width), int(screen_height));
+    else
+      -- ALLEGRO_FULLSCREEN_WINDOW
+      al_set_new_display_flags(512);
+      state.settings_menu(0).text := settings_fullscreen_toggle_text_on;
+      
+      Set_Up_Fullscreen_Window: declare
+        monitor_info : access ALLEGRO_MONITOR_INFO := new ALLEGRO_MONITOR_INFO;
+        t : access ALLEGRO_TRANSFORM := new ALLEGRO_TRANSFORM;
+      begin
+        if Boolean(al_get_monitor_info(0, monitor_info)) then
+          state.monitor_width := Integer(monitor_info.x2 - monitor_info.x1);
+          state.monitor_height := Integer(monitor_info.y2 - monitor_info.y1);
+          Display := al_create_display(int(state.monitor_width), int(state.monitor_height));
+          state.fullscreen_bitmap := al_create_bitmap(int(screen_width), int(screen_height));
+        end if;
+      end Set_Up_Fullscreen_Window;
+    end if;
+    
+    state.fullscreen := not state.fullscreen;
+    
+    DisplayEventSrc := al_get_display_event_source(Display);
+    al_register_event_source(Q, DisplayEventSrc);
+  end Settings_Toggle_Fullscreen;
+  
+  procedure Settings_Close is
+  begin
+    state.main_menu_mode := Main;
+  end Settings_Close;
   
   procedure Choose_Stage is
   begin
@@ -649,9 +736,9 @@ procedure Fighting_Game_Ada is
         sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
         played_successfully : Boolean := false;
       begin
-	Attacker.pushback := hit_with.hit_pushback * (case Attacker.facing_right is when true => -1.0, when false => 1.0);
-	Attacker.pushback_duration := hit_with.hit_pushback_duration;
-	
+        Attacker.pushback := hit_with.hit_pushback * (case Attacker.facing_right is when true => -1.0, when false => 1.0);
+        Attacker.pushback_duration := hit_with.hit_pushback_duration;
+        
         if Defender.armor > 0 then
           Defender.armor := Defender.armor - 1;
         else
@@ -662,7 +749,7 @@ procedure Fighting_Game_Ada is
           Defender.knockback_velocity_horizontal := hit_with.knockback_horizontal;
           Defender.knockback_duration := hit_with.knockback_duration;
           Defender.dash_duration := 0;
-	  Defender.pushback_duration := 0;
+          Defender.pushback_duration := 0;
           Fighter.Execute_Move(Defender, Defender.on_hit_steps, Hit_By_Attack);
         end if;
       end On_Hit;
@@ -671,8 +758,8 @@ procedure Fighting_Game_Ada is
         sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
         played_successfully : Boolean := Boolean(al_play_sample(block_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
       begin
-	Attacker.pushback := blocked.hit_pushback * (case Attacker.facing_right is when true => -1.0, when false => 1.0);
-	Attacker.pushback_duration := blocked.hit_pushback_duration;
+        Attacker.pushback := blocked.hit_pushback * (case Attacker.facing_right is when true => -1.0, when false => 1.0);
+        Attacker.pushback_duration := blocked.hit_pushback_duration;
         Defender.blockstun_duration := universal_blockstun;
         if Defender.crouching then
           Fighter.Execute_Move(Defender, Defender.crouching_block_steps, Blocked_Attack);
@@ -809,7 +896,21 @@ procedure Fighting_Game_Ada is
       end if;
     end if;
   end Set_Players_Blocking;
-    
+  
+  procedure Play_Menu_Move_Sound is
+    sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+    played_successfully : Boolean;
+  begin
+    played_successfully := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+  end Play_Menu_Move_Sound;
+  
+  procedure Play_Menu_Select_Sound is
+    sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
+    played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
+  begin
+    null;
+  end Play_Menu_Select_Sound;
+  
   procedure Open_Assignment_Screen is
   begin
     state.player_assignment_screen_open := true;
@@ -1091,33 +1192,35 @@ procedure Fighting_Game_Ada is
                 
                 MenuInput:
                   declare
-                    procedure Play_Move_Sound is
-                      sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
-                      played_successfully : Boolean;
-                    begin
-                      played_successfully := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                    end Play_Move_Sound;
-                    
-                    procedure Menu_Input (Player_GIS : Game_Input_State) is
+                    generic
+                      Player_GIS : Game_Input_State;
+                      menu_entries : access Menu_Entry_Array;
+                      index_of_menu : in out Natural;
+                    procedure Menu_Input;
+                    procedure Menu_Input is
                     begin
                       if not state.menu_help_screen_shown then
                         if Input_Recognized(Ev, Player_GIS, Up_Press) then
-                          state.menu_index := Menu_Move(state.main_menu.all, state.menu_index, Up);
-                          Play_Move_Sound;
+                          index_of_menu := Menu_Move(menu_entries.all, index_of_menu, Up);
+                          Play_Menu_Move_Sound;
                         elsif Input_Recognized(Ev, Player_GIS, Down_Press) then
-                          state.menu_index := Menu_Move(state.main_menu.all, state.menu_index, Down);
-                          Play_Move_Sound;
+                          index_of_menu := Menu_Move(menu_entries.all, index_of_menu, Down);
+                          Play_Menu_Move_Sound;
                         elsif Input_Recognized(Ev, Player_GIS, Left_Press) then
-                          state.menu_index := Menu_Move(state.main_menu.all, state.menu_index, Left);
-                          Play_Move_Sound;
+                          index_of_menu := Menu_Move(menu_entries.all, index_of_menu, Left);
+                          Play_Menu_Move_Sound;
                         elsif Input_Recognized(Ev, Player_GIS, Right_Press) then
-                          state.menu_index := Menu_Move(state.main_menu.all, state.menu_index, Right);
-                          Play_Move_Sound;
-                        end if;
-                        if Input_Recognized(Ev, Player_GIS, default_general_menu_select) then
-                          Menu_Select_Entry(state.main_menu.all, state.menu_index);
+                          index_of_menu := Menu_Move(menu_entries.all, index_of_menu, Right);
+                          Play_Menu_Move_Sound;
+                        elsif Input_Recognized(Ev, Player_GIS, default_general_menu_select) then
+                          Menu_Select_Entry(menu_entries.all, index_of_menu);
+                          Play_Menu_Select_Sound;
                         elsif Input_Recognized(Ev, Player_GIS, Start_Press) then
-                          state.menu_help_screen_shown := true;
+                          if state.main_menu_mode = Main then
+                            state.menu_help_screen_shown := true;
+                          end if;
+                        elsif Input_Recognized(Ev, Player_GIS, default_general_menu_go_back) and state.main_menu_mode = Settings then
+                          state.main_menu_mode := Main;
                         end if;
                       else
                         if Input_Recognized(Ev, Player_GIS, default_general_menu_go_back) then
@@ -1125,92 +1228,79 @@ procedure Fighting_Game_Ada is
                         end if;
                       end if;
                     end Menu_Input;
-                    procedure Menu_Input_For_P1 is begin Menu_Input(state.p1_input_state); end Menu_Input_For_P1;
-                    procedure Menu_Input_For_P2 is begin Menu_Input(state.p2_input_state); end Menu_Input_For_P2;
-                    procedure Menu_Input_For_Player is new Do_For_Both_Players(Only_Call_P2_If_State_Unchanged => true, P1_Call => Menu_Input_For_P1, P2_Call => Menu_Input_For_P2);
+                    generic
+                      Player_GIS : Game_Input_State;
+                    procedure Menu_Input_For_Player;
+                    procedure Menu_Input_For_Player is
+                    begin
+                      case state.main_menu_mode is
+                        when Main =>
+                          Main_Menu_Input: declare
+                            procedure Main_Input_Instance is new Menu_Input(Player_GIS, state.main_menu, state.menu_index);
+                          begin
+                            Main_Input_Instance;
+                          end Main_Menu_Input;
+                        when Settings =>
+                          Settings_Menu_Input: declare
+                            procedure Settings_Input_Instance is new Menu_Input(Player_GIS, state.settings_menu, state.settings_index);
+                          begin
+                            Settings_Input_Instance;
+                          end Settings_Menu_Input;
+                          null;
+                      end case;
+                    end Menu_Input_For_Player;
+                    procedure Menu_Input_For_P1 is new Menu_Input_For_Player(state.p1_input_state);
+                    procedure Menu_Input_For_P2 is new Menu_Input_For_Player(state.p2_input_state);
+                    procedure Menu_Input_For_Both_Players is new Do_For_Both_Players(Only_Call_P2_If_State_Unchanged => true, P1_Call => Menu_Input_For_P1, P2_Call => Menu_Input_For_P2);
                     
                   begin
-                    Menu_Input_For_Player;
+                    Menu_Input_For_Both_Players;
                   end MenuInput;
               when Stage_Select =>
-                StateInput:
+                Stage_Select_Input:
                   declare
-                    procedure Stage_Move_Sound is
-                      sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
-                      played : Boolean := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                    begin
-                      null;
-                    end Stage_Move_Sound;
-                    
-                    procedure Stage_Select_Sound is
-                      sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
-                      played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                    begin
-                      null;
-                    end Stage_Select_Sound;
                   begin
                     if Input_Recognized(Ev, state.p1_input_state, Up_Press) then
                       state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Up);
-                      Stage_Move_Sound;
+                      Play_Menu_Move_Sound;
                     elsif Input_Recognized(Ev, state.p1_input_state, Down_Press) then
                       state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Down);
-                      Stage_Move_Sound;
+                      Play_Menu_Move_Sound;
                     elsif Input_Recognized(Ev, state.p1_input_state, Left_Press) then
                       state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Left);
-                      Stage_Move_Sound;
+                      Play_Menu_Move_Sound;
                     elsif Input_Recognized(Ev, state.p1_input_state, Right_Press) then
                       state.p1_stage_index := Menu_Move(state.stage_entries.all, state.p1_stage_index, Right);
-                      Stage_Move_Sound;
-                    end if;
-                    
-                    if Input_Recognized(Ev, state.p1_input_state, default_general_menu_select) then
+                      Play_Menu_Move_Sound;
+                    elsif Input_Recognized(Ev, state.p1_input_state, default_general_menu_select) then
                       Menu_Select_Entry(state.stage_entries.all, state.p1_stage_index);
-                      Stage_Select_Sound;
-                    end if;
-
-                    if Input_Recognized(Ev, state.p1_input_state, default_general_menu_go_back) then
+                      Play_Menu_Select_Sound;
+                    elsif Input_Recognized(Ev, state.p1_input_state, default_general_menu_go_back) then
                       Go_Back_To_Menu;
                     end if;
-                  end StateInput;
+                  end Stage_Select_Input;
               when Character_Select =>
                 Char_Select_Input:
                   declare
                     procedure Char_Select_Input (GIS : Game_Input_State; menu_index : in out Natural) is
                       menu : constant access Menu_Entry_Array := state.char_entries;
-                      sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
-                      
-                      procedure Char_Move_Sound is
-                        played : Boolean := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                      begin
-                        null;
-                      end Char_Move_Sound;
-                      
-                      procedure Char_Select_Sound is
-                        played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                      begin
-                        null;
-                      end Char_Select_Sound;
                     begin
                       if Input_Recognized(Ev, GIS, Up_Press) then
                         menu_index := Menu_Move(menu.all, menu_index, Up);
-                        Char_Move_Sound;
+                        Play_Menu_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, Down_Press) then
                         menu_index := Menu_Move(menu.all, menu_index, Down);
-                        Char_Move_Sound;
+                        Play_Menu_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, Left_Press) then
                         menu_index := Menu_Move(menu.all, menu_index, Left);
-                        Char_Move_Sound;
+                        Play_Menu_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, Right_Press) then
                         menu_index := Menu_Move(menu.all, menu_index, Right);
-                        Char_Move_Sound;
-                      end if;
-                      
-                      if Input_Recognized(Ev, GIS, default_general_menu_select) then
+                        Play_Menu_Move_Sound;
+                      elsif Input_Recognized(Ev, GIS, default_general_menu_select) then
                         Menu_Select_Entry(menu.all, menu_index);
-                        Char_Select_Sound;
-                      end if;
-                      
-                      if Input_Recognized(Ev, GIS, default_general_menu_go_back) then
+                        Play_Menu_Select_Sound;
+                      elsif Input_Recognized(Ev, GIS, default_general_menu_go_back) then
                         Main_Menu_Go_To_Verses;
                       end if;
                     end Char_Select_Input;
@@ -1426,30 +1516,16 @@ procedure Fighting_Game_Ada is
                           Fighter.Release_Input(F, Globals.atk_6, state.frame);
                         end if;
                       end Playback_Player_Inputs;
-                      
-                      procedure Pause_Move_Sound is
-                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
-                        played : Boolean := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                      begin
-                        null;
-                      end Pause_Move_Sound;
-                      
-                      procedure Pause_Select_Sound is
-                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
-                        played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                      begin
-                        null;
-                      end Pause_Select_Sound;
                     begin
                       if Input_Recognized(Ev, pause_player_input_state, Up_Press) then
                         state.pause_menu_options_index := Menu_Move(state.pause_menu_options.all, state.pause_menu_options_index, Up);
-                        Pause_Move_Sound;
+                        Play_Menu_Move_Sound;
                       elsif Input_Recognized(Ev, pause_player_input_state, Down_Press) then
                         state.pause_menu_options_index := Menu_Move(state.pause_menu_options.all, state.pause_menu_options_index, Down);
-                        Pause_Move_Sound;
+                        Play_Menu_Move_Sound;
                       elsif Input_Recognized(Ev, pause_player_input_state, default_general_menu_select) then
                         Menu_Select_Entry(state.pause_menu_options.all, state.pause_menu_options_index);
-                        Pause_Select_Sound;
+                        Play_Menu_Select_Sound;
                       elsif Input_Recognized(Ev, pause_player_input_state, Start_Press) then
                         state.paused := Unpaused;
                         state.pause_menu_options_index := 0;
@@ -1487,29 +1563,16 @@ procedure Fighting_Game_Ada is
                 Battle_Over_Input:
                   declare
                     procedure Player_Decide_After_Battle (GIS : Game_Input_State) is
-                      procedure Battle_Over_Move_Sound is
-                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
-                        played : Boolean := Boolean(al_play_sample(menu_move_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                      begin
-                        null;
-                      end Battle_Over_Move_Sound;
-                      
-                      procedure Battle_Over_Select_Sound is
-                        sid : access ALLEGRO_SAMPLE_ID := new ALLEGRO_SAMPLE_ID;
-                        played : Boolean := Boolean(al_play_sample(menu_select_sound, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, sid));
-                      begin
-                        null;
-                      end Battle_Over_Select_Sound;
                     begin
                       if Input_Recognized(Ev, GIS, Up_Press) then
                         state.after_battle_index := Menu_Move(state.after_battle_options.all, state.after_battle_index, Up);
-                        Battle_Over_Move_Sound;
+                        Play_Menu_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, Down_Press) then
                         state.after_battle_index := Menu_Move(state.after_battle_options.all, state.after_battle_index, Down);
-                        Battle_Over_Move_Sound;
+                        Play_Menu_Move_Sound;
                       elsif Input_Recognized(Ev, GIS, default_general_menu_select) then
                         Menu_Select_Entry(state.after_battle_options.all, state.after_battle_index);
-                        Battle_Over_Select_Sound;
+                        Play_Menu_Select_Sound;
                       end if;
                     end Player_Decide_After_Battle;
                     procedure Player_Decide_P1 is begin Player_Decide_After_Battle(state.p1_input_state); end Player_Decide_P1;
@@ -1580,6 +1643,12 @@ procedure Fighting_Game_Ada is
     end Draw_Menu_Back_Input;
     
   begin
+    if state.fullscreen then
+      al_set_target_bitmap(state.fullscreen_bitmap);
+      al_identity_transform(transform);
+      al_use_transform(transform);
+    end if;
+    
     al_clear_to_color(Color_Black);
     
     if state.player_assignment_screen_open then
@@ -1654,19 +1723,44 @@ procedure Fighting_Game_Ada is
           al_identity_transform(transform);
           al_scale_transform(transform, menu_text_zoom, menu_text_zoom);
           al_use_transform(transform);
-          for e in state.main_menu.all'Range loop
-            Step:
-              declare
-                elem : Menu_Entry := state.main_menu.all(e);
-              begin
-                if e = state.menu_index then
-                  -- need to indicate that this element is currently selected
-                  Draw_General_Option(elem.text.all, elem.offset, Selected);
-                else
-                  Draw_General_Option(elem.text.all, elem.offset, Unselected);
-                end if;
-              end Step;
-          end loop;
+          
+          Draw_Menu_Stuff: declare
+            generic
+              menu_entries : access Menu_Entry_Array;
+              index_of_menu : Natural;
+            procedure Draw_Menu_Loop;
+            procedure Draw_Menu_Loop is
+            begin
+              for e in menu_entries.all'Range loop
+                Step:
+                  declare
+                    elem : Menu_Entry := menu_entries.all(e);
+                  begin
+                    if e = index_of_menu then
+                      -- need to indicate that this element is currently selected
+                      Draw_General_Option(elem.text.all, elem.offset, Selected);
+                    else
+                      Draw_General_Option(elem.text.all, elem.offset, Unselected);
+                    end if;
+                  end Step;
+              end loop;
+            end Draw_Menu_Loop;
+          begin
+            case state.main_menu_mode is
+              when Main =>
+                Draw_Main_Menu_Stuff: declare
+                  procedure Draw_Main_Menu_Loop is new Draw_Menu_Loop(state.main_menu, state.menu_index);
+                begin
+                  Draw_Main_Menu_Loop;
+                end Draw_Main_Menu_Stuff;
+              when Settings =>
+                Draw_Settings_Menu_Stuff: declare
+                  procedure Draw_Settings_Menu_Loop is new Draw_Menu_Loop(state.settings_menu, state.settings_index);
+                begin
+                  Draw_Settings_Menu_Loop;
+                end Draw_Settings_Menu_Stuff;
+            end case;
+          end Draw_Menu_Stuff;
           
           al_identity_transform(transform);
           al_use_transform(transform);
@@ -1723,9 +1817,14 @@ procedure Fighting_Game_Ada is
               
               Draw_Menu_Back_Input(default_general_menu_go_back);
           else
-            al_draw_text(basic_font, Text_Color, 540.0, 470.0, 0, New_String("Press " & Game_Input_Press_To_String(Start_Press) & " for Help"));
+            case state.main_menu_mode is
+              when Main =>
+                al_draw_text(basic_font, Text_Color, 540.0, 470.0, 0, New_String("Press " & Game_Input_Press_To_String(Start_Press) & " for Help"));
+              when Settings =>
+                Draw_Menu_Back_Input(default_general_menu_go_back);
+            end case;
             
-            Draw_Menu_Select_Input(Attack_4_Press, "Select");
+            Draw_Menu_Select_Input(default_general_menu_select, "Select");
           end if;
         when Stage_Select =>
           al_draw_bitmap(state.stage_select_background, 0.0, 0.0, 0);
@@ -1898,6 +1997,19 @@ procedure Fighting_Game_Ada is
               Draw_Menu_Select_Input(default_general_menu_select, "Select");
             end Draw_Victory_Screen;
       end case;
+    end if;
+    
+    if state.fullscreen then
+      Draw_Scaled_For_Fullscreen: declare
+        scale_by : Float := Float(state.monitor_height) / Float(screen_height);
+      begin
+        al_set_target_bitmap(al_get_backbuffer(Display));
+        al_identity_transform(transform);
+        al_scale_transform(transform, scale_by, scale_by);
+        al_translate_transform(transform, (Float(state.monitor_width) - (Float(screen_width) * scale_by)) / 2.0, 0.0);
+        al_use_transform(transform);
+        al_draw_bitmap(state.fullscreen_bitmap, 0.0, 0.0, 0);
+      end Draw_Scaled_For_Fullscreen;
     end if;
     
     al_flip_display;
@@ -2073,8 +2185,8 @@ begin
                           Player.dash_duration := 0;
                           Player.upper_hitbox_temp_offset := Position'(X => 0.0, Y => 0.0);
                           Player.lower_hitbox_temp_offset := Position'(X => 0.0, Y => 0.0);
-			  Player.pushback := 0.0;
-			  Player.pushback_duration := 0;
+                          Player.pushback := 0.0;
+                          Player.pushback_duration := 0;
                           
                           for EB of Player.extended_bitmaps.all loop
                             EB.shown := false;
