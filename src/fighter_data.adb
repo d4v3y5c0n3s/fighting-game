@@ -440,7 +440,7 @@ package body Fighter_Data is
         -- grab
         Fighter.Add_Move(data,
           Move.Move'(
-            command => new Move.Move_Input_Sequence'(new Input_Tree_Node'(ID => atk_1), new Input_Tree_Node'(ID => atk_4)),
+            command => new Move.Move_Input_Sequence'(atk_1, simult, atk_4),
             doing => Move.Grab,
             steps => new Move.Move_Step_Array'(
               new Move.Move_Step'(frame_duration => 10, operations => new Move.Move_Sub_Step_Collection'(
@@ -478,7 +478,7 @@ package body Fighter_Data is
         
         -- Brain-Famished Lunge
         Fighter.Add_Move(data,
-          Move.Move'(command => new Move.Move_Input_Sequence'(new Input_Tree_Node'(ID => down), new Input_Tree_Node'(ID => right), new Input_Tree_Node'(ID => atk_2)),
+          Move.Move'(command => new Move.Move_Input_Sequence'(down, right, atk_2),
           doing => Move.None,
           steps => new Move.Move_Step_Array'(
             0 => new Move.Move_Step'(frame_duration => 10, operations => new Move.Move_Sub_Step_Collection'(
@@ -543,7 +543,7 @@ package body Fighter_Data is
         
         -- Coffin Dweller's Rollout
         Fighter.Add_Move(data,
-          Move.Move'(command => new Move.Move_Input_Sequence'(new Input_Tree_Node'(ID => down), new Input_Tree_Node'(ID => right), new Input_Tree_Node'(ID => atk_5)),
+          Move.Move'(command => new Move.Move_Input_Sequence'(down, right, atk_5),
           doing => Move.None,
           steps => new Move.Move_Step_Array'(
             0 => new Move.Move_Step'(frame_duration => 10, operations => new Move.Move_Sub_Step_Collection'(
@@ -618,7 +618,7 @@ package body Fighter_Data is
         
         -- Anti-Human Helicopter
         Fighter.Add_Move(data,
-          Move.Move'(command => new Move.Move_Input_Sequence'(new Input_Tree_Node'(ID => left), new Input_Tree_Node'(ID => right), new Input_Tree_Node'(ID => atk_1)),
+          Move.Move'(command => new Move.Move_Input_Sequence'(left, right, atk_1),
           doing => Move.None,
           steps => new Move.Move_Step_Array'(
             new Move.Move_Step'(frame_duration => 7, operations => new Move.Move_Sub_Step_Collection'(
@@ -686,7 +686,7 @@ package body Fighter_Data is
         
         Fighter.Add_Move(data,
           Move.Move'(
-            command => new Move.Move_Input_Sequence'(new Input_Tree_Node'(ID => atk_1), new Input_Tree_Node'(ID => atk_4)),
+            command => new Move.Move_Input_Sequence'(atk_1, atk_4),
             doing => Move.Grab,
             steps => new Move.Move_Step_Array'(
               new Move.Move_Step'(frame_duration => 10, operations => new Move.Move_Sub_Step_Collection'(
@@ -724,7 +724,7 @@ package body Fighter_Data is
         
         Fighter.Add_Move(data,
           Move.Move'(
-            command => new Move.Move_Input_Sequence'(new Input_Tree_Node'(ID => up), new Input_Tree_Node'(ID => atk_1)),
+            command => new Move.Move_Input_Sequence'(up, atk_1),
             doing => Move.None,
             steps => new Move.Move_Step_Array'(
               new Move.Move_Step'(frame_duration => 10, operations => new Move.Move_Sub_Step_Collection'(
@@ -792,12 +792,7 @@ package body Fighter_Data is
         
         Fighter.Add_Move(data,
           Move.Move'(
-            command => new Move.Move_Input_Sequence'(
-              new Input_Tree_Node'(ID => left),
-              new Input_Tree_Node'(ID => down),
-              new Input_Tree_Node'(ID => right),
-              new Input_Tree_Node'(ID => atk_4)
-            ),
+            command => new Move.Move_Input_Sequence'(left, down, right, atk_4),
             doing => Move.None,
             steps => new Move.Move_Step_Array'(
               new Move.Move_Step'(
@@ -846,11 +841,7 @@ package body Fighter_Data is
         
         Fighter.Add_Move(data,
           Move.Move'(
-            command => new Move.Move_Input_Sequence'(
-              new Input_Tree_Node'(ID => left),
-              new Input_Tree_Node'(ID => right),
-              new Input_Tree_Node'(ID => atk_6)
-            ),
+            command => new Move.Move_Input_Sequence'(left, right, atk_6),
             doing => Move.None,
             steps => new Move.Move_Step_Array'(
               new Move.Move_Step'(

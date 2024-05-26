@@ -1905,10 +1905,10 @@ procedure Fighting_Game_Ada is
                   function Move_Inputs_Text (at_ind : Natural) return String is
                     move_we_want : constant Move.Move := player_moves_col(Fighter_Move_Indexes(fo)(at_ind));
                     ret : Unbounded_String := To_Unbounded_String("");
-                    cmd : Input_Tree_Node_Access;
+                    cmd : input_ids;
                     
-                    function Tree_ID_To_Text (tree_id : input_tree_id) return String is
-                      id_text : String := (case tree_id is
+                    function Input_ID_To_Text (inp_id : input_ids) return String is
+                      id_text : String := (case inp_id is
                         when up => "Up",
                         when down => "Down",
                         when left => "Left",
@@ -1919,17 +1919,15 @@ procedure Fighting_Game_Ada is
                         when atk_4 => "Attack 4",
                         when atk_5 => "Attack 5",
                         when atk_6 => "Attack 6",
-                        when tree_end => ""
+                        when simult => " + "
                       );
                     begin
                       return "<" & id_text & ">";
-                    end Tree_ID_To_Text;
+                    end Input_ID_To_Text;
                   begin
                     for I in move_we_want.command.all'Range loop
                       cmd := move_we_want.command.all(I);
-                      if cmd.ID /= tree_end then
-                        ret := ret & (if I /= move_we_want.command.all'First then ", " else "") & Tree_ID_To_Text(cmd.ID);
-                      end if;
+                      ret := ret & (if I /= move_we_want.command.all'First and not(cmd = simult) then ", " else "") & Input_ID_To_Text(cmd);
                     end loop;
                     
                     return To_String(ret);

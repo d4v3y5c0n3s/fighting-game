@@ -44,7 +44,7 @@ package Move is
   type Move_Step_Array is array(Natural range <>) of Move_Step_Access;
   type Move_Step_Array_Access is access Move_Step_Array;
   
-  type Move_Input_Sequence is array(Natural range <>) of Input_Tree_Node_Access;
+  type Move_Input_Sequence is array(Natural range <>) of input_ids;
   
   type Move_Specialty is (None, Grab);
   

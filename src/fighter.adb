@@ -16,14 +16,13 @@ package body Fighter is
     end if;
     Inputs_List.Append(F.inputs, on_frame);
   end Queue_Input;
-  
+
   procedure Add_Move (F : in out Fighter; M : Move.Move; Index : Natural; Cond : Tree_End_Conditions) is
-    root_cursor : Input_Tree.Cursor := Input_Tree.Root(F.tree_of_move_inputs);
-    child_cursor : Input_Tree.Cursor := Input_Tree.First_Child(root_cursor);
-    temp_node : Input_Tree_Node_Access := new Input_Tree_Node'(ID => up);
-    
-    procedure EnsureIsInTree (ToAdd : Input_Tree_Node_Access) is
+
+    function EnsureIsInTree (ToAdd : Input_Tree_Node_Access; root_cursor : Input_Tree.Cursor) return Input_Tree.Cursor is
+      child_cursor : Input_Tree.Cursor := Input_Tree.First_Child(root_cursor);
       cursor_out : Input_Tree.Cursor;
+      temp_node : Input_Tree_Node_Access := new Input_Tree_Node'(ID => up, category => Normal);
     begin
       loop
         if not Input_Tree.Has_Element(child_cursor) then
@@ -37,22 +36,117 @@ package body Fighter is
           cursor_out := child_cursor;
           exit;
         end if;
-        
+
         child_cursor := Input_Tree.Next_Sibling(child_cursor);
       end loop;
       
-      root_cursor := cursor_out;
-      child_cursor := Input_Tree.First_Child(root_cursor);
+      return cursor_out;
     end EnsureIsInTree;
+
+    procedure add_tree_end (root_cursor : Input_Tree.Cursor) is
+      -- this procedure makes the "tree_end" nodes
+      put_in_tree : constant Input_Tree.Cursor := EnsureIsInTree(new Input_Tree_Node'(ID => tree_end, key => Index, condition => Cond), root_cursor);
+    begin
+      null;
+    end add_tree_end;
+
+    function add_input_to_tree (Cmd : input_ids; root_cursor : Input_Tree.Cursor; cat : Button_Delay_Category) return Input_Tree.Cursor is
+      tree_id : constant input_tree_id := input_tree_id(Cmd);
+      Node : Input_Tree_Node_Access(tree_id) := new Input_Tree_Node(ID => tree_id);
+    begin
+      Node.category := cat;
+      return EnsureIsInTree(Node, root_cursor);
+    end add_input_to_tree;
+
+    package Simult_Inputs_List is new Ada.Containers.Doubly_Linked_Lists(input_tree_id);
+
+    function make_simult_list (sequence : Move.Move_Input_Sequence; start_at : Natural; ind_after_simult : out Natural) return Simult_Inputs_List.List is
+      ret : Simult_Inputs_List.List;
+    begin
+      for I in start_at .. sequence'Last loop
+        ind_after_simult := I;
+
+        if sequence(I) /= simult then
+          Simult_Inputs_List.Append(ret, sequence(I));
+        end if;
+
+        if not(I = sequence'Last) then
+          if not(sequence(I+1) = simult) and not(sequence(I) = simult) then
+            ind_after_simult := ind_after_simult + 1;
+            exit;
+          end if;
+        end if;
+      end loop;
+
+      return ret;
+    end make_simult_list;
+
+    procedure Add_Move_To_Tree (root_cursor : Input_Tree.Cursor; sequence : Move.Move_Input_Sequence; start_index : Natural);
+
+    procedure process_simult_list (simult_list : Simult_Inputs_List.List; root_cursor : Input_Tree.Cursor; sequence : Move.Move_Input_Sequence; start_index : Natural) is
+      curr : Simult_Inputs_List.Cursor := Simult_Inputs_List.First(simult_list);
+      curr_elem : input_tree_id;
+      rec_list : Simult_Inputs_List.List;
+      find_curr : Simult_Inputs_List.Cursor;
+    begin
+      if Simult_Inputs_List.Is_Empty(simult_list) then
+        add_tree_end(root_cursor);
+        
+        if start_index < sequence'Last then
+          Add_Move_To_Tree(root_cursor, sequence, start_index);
+        end if;
+        
+        return;
+      end if;
+
+      while Simult_Inputs_List.Has_Element(curr) loop
+        rec_list := simult_list;
+        curr_elem := Simult_Inputs_List.Element(curr);
+        find_curr := Simult_Inputs_List.Find(rec_list, curr_elem);
+        Simult_Inputs_List.Delete(rec_list, find_curr);
+        process_simult_list(rec_list, add_input_to_tree(curr_elem, root_cursor, Simult), sequence, start_index);
+
+        Simult_Inputs_List.Next(curr);
+      end loop;
+    end process_simult_list;
+
+    procedure Add_Move_To_Tree (root_cursor : Input_Tree.Cursor; sequence : Move.Move_Input_Sequence; start_index : Natural) is
+      cursor : Input_Tree.Cursor := root_cursor;
+    begin
+      for I in start_index .. sequence'Last loop
+        Process_Command: declare
+          Cmd : constant input_ids := sequence(I);
+      
+        begin
+          if I < sequence'Last then
+            if sequence(I + 1) = simult then
+              Process_List_Simult_Inputs: declare
+                after_simult : Natural := 0;
+                simult_list : Simult_Inputs_List.List := make_simult_list(sequence, I, after_simult);
+              begin
+                process_simult_list(simult_list, cursor, sequence, after_simult);
+              end Process_List_Simult_Inputs;
+              return;
+            end if;
+          end if;
+
+          if Cmd /= simult then
+            cursor := add_input_to_tree(Cmd, cursor, Normal);
+          end if;
+
+          if I = sequence'Last then
+            add_tree_end(cursor);
+          end if;
+        end Process_Command;
+      end loop;
+      
+    end Add_Move_To_Tree;
   begin
-    for I of M.command.all loop
-      EnsureIsInTree(I);
-    end loop;
-    
-    EnsureIsInTree(new Input_Tree_Node'(ID => tree_end, key => Index, condition => Cond));
+    Add_Move_To_Tree(Input_Tree.Root(F.tree_of_move_inputs), M.command.all, 0);
+
     F.moves(Index) := M;
   end Add_Move;
-  
+
   procedure Play_Walk_Anim (F : in out Fighter) is
   begin
     if F.on_ground and not Stunned(F) and not F.crouching and F.doing /= Normal_Move then
@@ -99,7 +193,7 @@ package body Fighter is
         Play_Walk_Anim(F);
       when down =>
         F.holding_down := true;
-        
+
         if F.on_ground and not Stunned(F) and (F.doing = Idle or F.doing = Walk) then
           F.crouching := true;
           Execute_Move(F, F.start_crouch_steps, Start_Crouch);
@@ -108,7 +202,7 @@ package body Fighter is
         null;
     end case;
   end Press_Input;
-  
+
   procedure Release_Input (F : in out Fighter; given_input : input_ids; frame : Natural) is
   begin
     case given_input is
@@ -120,10 +214,10 @@ package body Fighter is
         Play_Walk_Anim(F);
       when down =>
         F.holding_down := false;
-        
+
         if F.crouching and not Stunned(F) then
           F.crouching := false;
-          
+
           if F.doing = Start_Crouch or F.doing = Crouched then
             Execute_Move(F, F.start_uncrouch_steps, Start_Uncrouch);
           end if;
@@ -132,7 +226,7 @@ package body Fighter is
         null;
     end case;
   end Release_Input;
-  
+
   procedure Draw (F : Fighter) is
     pos_with_offset : constant Position := F.pos + F.sprite_offset;
     sprite_facing : constant Interfaces.C.int := (if not F.facing_right then 1 else 0);
@@ -144,7 +238,7 @@ package body Fighter is
       Float(pos_with_offset.X), Float(pos_with_offset.Y),
       sprite_facing
     );
-    
+
     Draw_Extented_Bitmaps:
       declare
       begin
@@ -154,18 +248,18 @@ package body Fighter is
           end if;
         end loop;
       end Draw_Extented_Bitmaps;
-    
+
     Draw_Projectiles:
       declare
         p_cursor : Active_Projectiles_List.Cursor := Active_Projectiles_List.First(F.active_projectiles);
       begin
         while Active_Projectiles_List.Has_Element(p_cursor) loop
           Projectile.Draw(Active_Projectiles_List.Element(p_cursor));
-          
+
           p_cursor := Active_Projectiles_List.Next(p_cursor);
         end loop;
       end Draw_Projectiles;
-    
+
     if F.show_hitboxes then
       Draw_Debug_Hitboxes:
         declare
@@ -179,17 +273,17 @@ package body Fighter is
           allegro_primitives_h.al_draw_circle(Float(upper_hb_pos.X), Float(upper_hb_pos.Y), Float(F.upper_hitbox.radius), debug_upper_hitbox_color, 4.0);
           allegro_primitives_h.al_draw_circle(Float(lower_hb_pos.X), Float(lower_hb_pos.Y), Float(F.lower_hitbox.radius), debug_lower_hitbox_color, 4.0);
           allegro_primitives_h.al_draw_circle(Float(cb_hb_pos.X), Float(cb_hb_pos.Y), Float(F.chunkbox.radius), debug_chunkbox_color, 4.0);
-          
+
           while Active_Hitboxes.Has_Element(index) loop
             elem := Active_Hitboxes.Element(index);
-            
+
             attack_hitbox_pos := (if F.facing_right then F.pos + elem.shape.pos else F.pos - elem.shape.pos);
-            
+
             allegro_primitives_h.al_draw_circle(Float(attack_hitbox_pos.X), Float(attack_hitbox_pos.Y), Float(elem.shape.radius), debug_attack_hitbox_color, 4.0);
-            
+
             index := Active_Hitboxes.Next(index);
           end loop;
-          
+
           Draw_Projectile_Hitboxes:
             declare
               ap_cursor : Active_Projectiles_List.Cursor := Active_Projectiles_List.First(F.active_projectiles);
@@ -198,13 +292,13 @@ package body Fighter is
               phbs_elem : Hitbox;
             begin
               while Active_Projectiles_List.Has_Element(ap_cursor) loop
-              
+
                 phbs_cursor := Projectile.Projectile_Hitboxes.First(Active_Projectiles_List.Element(ap_cursor).hitboxes);
                 ap_elem := Active_Projectiles_List.Element(ap_cursor);
-                
+
                 while Projectile.Projectile_Hitboxes.Has_Element(phbs_cursor) loop
                   phbs_elem := Projectile.Projectile_Hitboxes.Element(phbs_cursor);
-                  
+
                   allegro_primitives_h.al_draw_circle(
                     Float((if not ap_elem.going_right then -ap_elem.x_offset else ap_elem.x_offset) + phbs_elem.shape.pos.X + ap_elem.pos.X),
                     Float(phbs_elem.shape.pos.Y + ap_elem.pos.Y),
@@ -212,17 +306,17 @@ package body Fighter is
                     debug_attack_hitbox_color,
                     4.0
                   );
-                  
+
                   phbs_cursor := Projectile.Projectile_Hitboxes.Next(phbs_cursor);
                 end loop;
-                
+
                 ap_cursor := Active_Projectiles_List.Next(ap_cursor);
               end loop;
             end Draw_Projectile_Hitboxes;
         end Draw_Debug_Hitboxes;
     end if;
   end Draw;
-  
+
   procedure Update (F : in out Fighter; Current_Frame : Natural) is
   begin
     -- do input buffer here
@@ -233,7 +327,7 @@ package body Fighter is
           inputs_cursor : Inputs_List.Cursor;
           tree_cursor : Input_Tree.Cursor;
           found_path_tree_cursor : Input_Tree.Cursor;
-          temp_node : Input_Tree_Node_Access := new Input_Tree_Node'(ID => up);
+          temp_node : Input_Tree_Node_Access := new Input_Tree_Node'(ID => up, category => Normal);
           longest_input_chain_key : Natural;
           longest_match : Inputs_List.List;
           found_match_at_level : Boolean := false;
@@ -246,7 +340,7 @@ package body Fighter is
             if Inputs_List.Is_Empty(F.inputs) then
               exit;
             end if;
-            
+
             if buffer_expired or button_delay_expired then
               tree_cursor := Input_Tree.First_Child(Input_Tree.Root(F.tree_of_move_inputs));
               inputs_cursor := Inputs_List.First(F.inputs);
@@ -259,9 +353,9 @@ package body Fighter is
                     exit;
                   end if;
                 end if;
-                
+
                 temp_node := Input_Tree.Element(tree_cursor);
-                
+
                 if temp_node.ID = tree_end then
                   if (temp_node.condition.works_standing and (F.on_ground and not F.crouching)) or (temp_node.condition.works_crouching and F.crouching) or (temp_node.condition.works_midair and not F.on_ground) then
                     longest_input_chain_key := temp_node.key;
@@ -271,27 +365,34 @@ package body Fighter is
                   tree_cursor := Input_Tree.Next_Sibling(tree_cursor);
                 elsif Inputs_List.Has_Element(inputs_cursor) then
                   elem_at_inputs_cursor := Inputs_List.Element(inputs_cursor);
-                  
-                  if temp_node.ID = elem_at_inputs_cursor.input then
-                    found_match_at_level := true;
-                    Inputs_List.Append(input_chain, elem_at_inputs_cursor);
-                    found_path_tree_cursor := tree_cursor;
-                    Inputs_List.Next(inputs_cursor);
-                    tree_cursor := Input_Tree.First_Child(tree_cursor);
-                  else
-                    tree_cursor := Input_Tree.Next_Sibling(tree_cursor);
-                  end if;
+                  Check_For_Match: declare
+                    simult_delay_satisfied : Boolean := (
+                      case temp_node.category is
+                        when Simult => (elem_at_inputs_cursor.frame + max_simultaneous_button_delay < Current_Frame),
+                        when others => true
+                    );
+                  begin
+                    if temp_node.ID = elem_at_inputs_cursor.input and simult_delay_satisfied then
+                      found_match_at_level := true;
+                      Inputs_List.Append(input_chain, elem_at_inputs_cursor);
+                      found_path_tree_cursor := tree_cursor;
+                      Inputs_List.Next(inputs_cursor);
+                      tree_cursor := Input_Tree.First_Child(tree_cursor);
+                    else
+                      tree_cursor := Input_Tree.Next_Sibling(tree_cursor);
+                    end if;
+                  end Check_For_Match;
                 else
                   tree_cursor := Input_Tree.Next_Sibling(tree_cursor);
                 end if;
               end loop;
-              
+
               inputs_cursor := Inputs_List.First(F.inputs);
               if match_found then
                 if F.doing /= Normal_Move then
                   -- Remove found input sequence & execute the associated move
                   Inputs_List.Delete(F.inputs, inputs_cursor, Inputs_List.Length(longest_match));
-                  
+
                   if not Stunned(F) then
                     Execute_Move(F, F.moves(longest_input_chain_key).steps, Normal_Move);
                   end if;
@@ -310,7 +411,7 @@ package body Fighter is
           end loop;
         end ProcessInputs;
     end if;
-    
+
     -- process move here
     if F.move_frame_progression = 0 then
       -- iterate through sub-steps & apply them
@@ -332,15 +433,15 @@ package body Fighter is
                   begin
                     while Active_Hitboxes.Has_Element(index) loop
                       elem := Active_Hitboxes.Element(index);
-                      
+
                       if elem.effect = Grab then
                         F.grabbing := true;
                       end if;
-                      
+
                       if elem.identity = operation.hb.identity and elem.hit then
                         operation.hb.hit := true;
                       end if;
-                      
+
                       index := Active_Hitboxes.Next(index);
                     end loop;
                     Active_Hitboxes.Append(F.attack_hitboxes, operation.hb);
@@ -356,7 +457,7 @@ package body Fighter is
                   begin
                     while Active_Hitboxes.Has_Element(index) loop
                       elem := Active_Hitboxes.Element(index);
-                      
+
                       if elem.identity = operation.despawn_hitbox_id then
                         found := true;
                         Active_Hitboxes.Delete(F.attack_hitboxes, index);
@@ -368,14 +469,14 @@ package body Fighter is
                           another_grabbox_remains := true;
                         end if;
                       end if;
-                      
+
                       index := Active_Hitboxes.Next(index);
                     end loop;
-                    
+
                     if a_grabbox_was_removed and not another_grabbox_remains then
                       F.grabbing := false;
                     end if;
-                    
+
                     if not found then
                       raise Hitbox_To_Despawn_Not_Found;
                     end if;
@@ -428,29 +529,29 @@ package body Fighter is
           end Operation_Step;
       end loop;
     end if;
-      
+
       F.move_frame_progression := F.move_frame_progression + 1;
-      
+
       if F.move_frame_progression >= F.active_move_steps(F.move_step_index).frame_duration then
         F.move_step_index := F.move_step_index + 1;
         F.move_frame_progression := 0;
       end if;
-      
+
       if F.move_step_index > F.active_move_steps'Last then
         Active_Hitboxes.Clear(F.attack_hitboxes);
-        
+
         F.move_step_index := 0;
-        
+
         F.grabbed := false;
         F.grabbing := false;
-        
+
         F.armor := 0;
-        
+
         if not (F.doing = Start_Crouch or F.doing = Crouched) then
           F.upper_hitbox_temp_offset := Position'(X => 0.0, Y => 0.0);
           F.lower_hitbox_temp_offset := Position'(X => 0.0, Y => 0.0);
         end if;
-        
+
         case F.doing is
           when Normal_Move | Grabbing | Blocked_Attack | Start_Uncrouch | Grabbed | Jump | Hit_By_Attack =>
             Execute_Move(F, F.idle_stand_steps, Idle);
@@ -462,11 +563,11 @@ package body Fighter is
             null;
         end case;
     end if;
-    
+
     -- continue processing the current animation here
     if F.animation_progression >= F.active_animation(F.active_anim_index).frame_dration then
       F.animation_progression := 0;
-      
+
       if F.active_anim_index < F.active_animation'Last then
         F.active_anim_index := F.active_anim_index + 1;
       else
@@ -475,7 +576,7 @@ package body Fighter is
     else
       F.animation_progression := F.animation_progression + 1;
     end if;
-    
+
     -- update position based on velocity
     if (F.knockback_duration > 0) then
       F.velocity_vertical := -F.knockback_velocity_vertical;
@@ -516,51 +617,51 @@ package body Fighter is
         end if;
       end if;
     end if;
-    
+
     F.pos := Position'(F.pos.X + F.velocity_horizontal, F.pos.Y + F.velocity_vertical);
-    
+
     -- apply gravity
     if not F.on_ground and not (F.dash_duration > 0) and not (F.knockback_duration > 0) then
       F.velocity_vertical := F.velocity_vertical + F.gravity;
     else
       F.velocity_vertical := 0.0;
     end if;
-    
+
     if F.hitstun_duration > 0 then
       F.hitstun_duration := F.hitstun_duration - 1;
     end if;
-    
+
     if F.blockstun_duration > 0 then
       F.blockstun_duration := F.blockstun_duration - 1;
     end if;
-    
+
     if F.knockback_duration > 0 then
       F.knockback_duration := F.knockback_duration - 1;
-      
+
       if F.knockback_duration = 0 then
         F.on_ground := false;
       end if;
     end if;
-    
+
     if F.dash_duration > 0 then
       F.dash_duration := F.dash_duration - 1;
-      
+
       if F.dash_duration = 0 then
         F.on_ground := false;
       end if;
     end if;
-    
+
     if F.pushback_duration > 0 then
       F.pushback_duration := F.pushback_duration - 1;
     end if;
-    
+
     -- update any extended bitmaps
     for EB of F.extended_bitmaps.all loop
       if EB.shown then
         Extended_Bitmap.Frame_Update(EB);
       end if;
     end loop;
-    
+
     -- update any projectiles
     Update_Projectiles:
       declare
@@ -569,20 +670,20 @@ package body Fighter is
       begin
         while Active_Projectiles_List.Has_Element(ap_cursor) loop
           ap_elem := Active_Projectiles_List.Element(ap_cursor);
-          
+
           Projectile.Frame_Update(ap_elem);
-          
+
           if ap_elem.frames_to_live > 0 then
             Active_Projectiles_List.Replace_Element(F.active_projectiles, ap_cursor, ap_elem);
           else
             Active_Projectiles_List.Delete(F.active_projectiles, ap_cursor);
           end if;
-          
+
           ap_cursor := Active_Projectiles_List.Next(ap_cursor);
         end loop;
       end Update_Projectiles;
   end Update;
-  
+
   procedure Execute_Move (F : in out Fighter; ThisMove : Move.Move_Step_Array_Access; Doing : What_Doing) is
   begin
     F.doing := Doing;

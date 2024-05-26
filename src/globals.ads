@@ -71,13 +71,15 @@ package Globals is
   
   default_trigger_axis_min : constant Float := -0.2;
   default_trigger_axis_max : constant Float := 1.0;
-  
-  type input_tree_id is (tree_end, up, down, left, right, atk_1, atk_2, atk_3, atk_4, atk_5, atk_6);
-  subtype input_ids is input_tree_id range up .. atk_6;
+
+  type command_id is (tree_end, up, down, left, right, atk_1, atk_2, atk_3, atk_4, atk_5, atk_6, simult);
+  subtype input_tree_id is command_id range tree_end .. atk_6;
+  subtype input_ids is command_id range up .. simult;
   
   frame_duration : constant Duration := 1.0 / 60.0;
   input_buffer_frames : constant Natural := 70;
   input_buffer_max_button_delay : constant Natural := 12;
+  max_simultaneous_button_delay : constant Natural := 7;
   
   universal_blockstun : constant Natural := 5;
   
@@ -89,6 +91,8 @@ package Globals is
     works_crouching : Boolean := true;
     works_midair : Boolean := true;
   end record;
+
+  type Button_Delay_Category is (Normal, Simult);
   
   type Input_Tree_Node(ID : input_tree_id) is record
     case ID is
@@ -96,7 +100,7 @@ package Globals is
         key : Natural;
         condition : Tree_End_Conditions;
       when others =>
-        null;
+        category : Button_Delay_Category;
     end case;
   end record;
   
