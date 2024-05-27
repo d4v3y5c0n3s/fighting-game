@@ -1,6 +1,10 @@
+with Ada.Numerics.Generic_Elementary_Functions;
+
 package Cool_Math is
 
-  type Scalar is delta 10.0 ** (-6) digits 13;
+  type Scalar is digits 13;
+
+  package Scalar_Elementary is new Ada.Numerics.Generic_Elementary_Functions(Scalar);
   
   type Position is record
     X : Scalar := 0.0;
@@ -17,8 +21,6 @@ package Cool_Math is
   function "-" (A, B : Position) return Position;
   
   function "+" (C : Circle; P : Position) return Circle;
-  
-  function "abs" (S : Scalar) return Scalar is (if S < 0.0 then S * (-1.0) else S);
   
   function Collides (A, B: Circle) return Boolean;
 

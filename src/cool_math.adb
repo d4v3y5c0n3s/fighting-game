@@ -16,8 +16,11 @@ package body Cool_Math is
   end "+";
   
   function Collides (A, B: Circle) return Boolean is
+    use Scalar_Elementary;
+    
+    function diff (V1, V2 : Scalar) return Scalar is (abs( (V2 - V1) ));
   begin
-    return (if abs(((B.pos.X - A.pos.X) + (B.pos.Y - A.pos.Y))) <= (A.radius + B.radius) then true else false);
+    return Sqrt( (diff(A.pos.X, B.pos.X) ** 2.0) + (diff(A.pos.Y, B.pos.Y) ** 2.0) ) < (A.radius + B.radius);
   end Collides;
 
 end Cool_Math;
